@@ -1,6 +1,7 @@
 'use strict';
 /* Dad & Dorie Care Log — all data stays in this browser (IndexedDB). */
 const DEFAULT_TYPES=['Medical appointments','Medications','Insurance / Medicare','DHS / caseworker','Banking / finances','Legal / paperwork','Shopping / errands','Home care / safety','Phone / email coordination','Transport','Other'];
+const DEFAULT_ROLES=['DHS caseworker','Primary doctor','Neurologist','Pharmacy','Medicare / insurance','Bank','Attorney','Home care agency','Family'];
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -19,7 +20,7 @@ const tx=(st,mode)=>db.transaction(st,mode).objectStore(st);
 const req=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 async function loadAll(){const all=await req(tx('items','readonly').getAll());for(const k in S)S[k]=[];for(const it of all)if(S[it.kind])S[it.kind].push(it);
   const st=tx('meta','readonly');const keys=await req(st.getAllKeys()),vals=await req(tx('meta','readonly').getAll());meta={};keys.forEach((k,i)=>meta[k]=vals[i]);
-  if(!meta.types)await setMeta('types',DEFAULT_TYPES.slice())}
+  if(!meta.types)await setMeta('types',DEFAULT_TYPES.slice());if(!meta.roles)await setMeta('roles',DEFAULT_ROLES.slice())}
 async function put(it){it.updated=Date.now();await req(tx('items','readwrite').put(it));const a=S[it.kind];const i=a.findIndex(x=>x.id===it.id);i>=0?a[i]=it:a.push(it)}
 async function del(it){await put({...it,deleted:true})}/* tombstone so import/merge keeps deletions */
 async function setMeta(k,v){meta[k]=v;await req(tx('meta','readwrite').put(v,k))}
@@ -39,11 +40,27 @@ $$('form .cancel').forEach(b=>b.onclick=()=>resetForm(b.form));
 
 /* ---------- Hours ---------- */
 const hf=$('#hourForm');
-function renderTypes(){const t=meta.types;$('#typeSelect').innerHTML='<option value="" disabled selected>Choose a task…</option>'+t.map(x=>`<option>${esc(x)}</option>`).join('');
+function renderTypes(){const t=meta.types,cur=$('#typeSelect').value;$('#typeSelect').innerHTML='<option value="" disabled selected>Choose a task…</option>'+t.map(x=>`<option>${esc(x)}</option>`).join('');
   $('#fType').innerHTML='<option value="">All</option>'+t.map(x=>`<option>${esc(x)}</option>`).join('');
-  $('#typeList').innerHTML=t.map((x,i)=>`<li><div class="body">${esc(x)}</div><div class="tools"><button data-up="${i}" aria-label="Move up">↑</button><button class="danger" data-rm="${i}">Remove</button></div></li>`).join('')}
-$('#typeList').onclick=async e=>{const t=meta.types.slice();const u=e.target.dataset.up,r=e.target.dataset.rm;if(u>0){[t[u-1],t[u]]=[t[u],t[u-1]]}else if(r!=null){if(!confirm(`Remove "${t[r]}" from the list? Existing entries keep it.`))return;t.splice(r,1)}else return;await setMeta('types',t);renderTypes()};
-$('#typeForm').onsubmit=async e=>{e.preventDefault();const v=e.target.t.value.trim();if(v&&!meta.types.includes(v)){await setMeta('types',[...meta.types.filter(x=>x!=='Other'),v,...(meta.types.includes('Other')?['Other']:[])]);renderTypes()}e.target.reset();toast('Task type added')};
+  if(cur&&t.includes(cur))$('#typeSelect').value=cur;
+  $('#roles').innerHTML=(meta.roles||[]).map(x=>`<option>${esc(x)}</option>`).join('')}
+/* ---------- List manager (task types, contact roles) ---------- */
+const MGR={types:{title:'Task types',def:DEFAULT_TYPES},roles:{title:'Contact roles',def:DEFAULT_ROLES}};let mk=null;
+function mgrRender(){const l=meta[mk];$('#mgrTitle').textContent='Edit '+MGR[mk].title.toLowerCase();
+  $('#mgrList').innerHTML=l.map((x,i)=>`<li><input value="${esc(x)}" data-i="${i}" aria-label="Rename ${esc(x)}"><div class="tools"><button type="button" data-up="${i}" aria-label="Move up" ${i?'':'disabled'}>↑</button><button type="button" data-dn="${i}" aria-label="Move down" ${i<l.length-1?'':'disabled'}>↓</button><button type="button" class="danger" data-rm="${i}" aria-label="Delete ${esc(x)}">✕</button></div></li>`).join('')||'<li class="muted">No options yet.</li>'}
+async function mgrSave(l){await setMeta(mk,l);renderTypes();mgrRender()}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-manage]');if(!b)return;mk=b.dataset.manage;mgrRender();$('#mgr').showModal()});
+$('#mgrList').addEventListener('change',async e=>{const i=e.target.dataset.i;if(i==null)return;const l=meta[mk].slice(),old=l[i],v=e.target.value.trim();
+  if(!v||l.includes(v)){e.target.value=old;return toast(v?'Already in the list':'Name can\'t be empty')}
+  l[i]=v;if(mk==='types'){for(const h of S.hours.filter(h=>h.type===old))await put({...h,type:v});renderHours()}await mgrSave(l);toast('Renamed')});
+$('#mgrList').addEventListener('click',async e=>{const d=e.target.closest('button')?.dataset;if(!d)return;const l=meta[mk].slice();
+  if(d.up){const i=+d.up;[l[i-1],l[i]]=[l[i],l[i-1]]}else if(d.dn){const i=+d.dn;[l[i+1],l[i]]=[l[i],l[i+1]]}
+  else if(d.rm){if(!confirm(`Delete "${l[d.rm]}"?`+(mk==='types'?' Past entries keep it.':'')))return;l.splice(d.rm,1)}else return;await mgrSave(l)});
+async function mgrAdd(){const v=$('#mgrNew').value.trim();if(!v)return;if(meta[mk].includes(v))return toast('Already in the list');const l=meta[mk].slice();
+  const o=l.indexOf('Other');mk==='types'&&o>=0?l.splice(o,0,v):l.push(v);$('#mgrNew').value='';await mgrSave(l);toast('Added')}
+$('#mgrAdd').onclick=mgrAdd;$('#mgrNew').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();mgrAdd()}};
+$('#mgrReset').onclick=async()=>{if(!confirm('Restore the default list? Your custom options will be removed (entries keep their values).'))return;await mgrSave(MGR[mk].def.slice())};
+$('#mgr').addEventListener('close',()=>{const sel=$('#typeSelect');if(mk==='types'&&!sel.value&&hf.elements.id.value==='')sel.selectedIndex=0});
 $('#quickHours').innerHTML=[[0,15],[0,30],[1,0],[1,30],[2,0],[3,0]].map(([h,m])=>`<button type="button" data-h="${h}" data-m="${m}">${h?h+'h':''}${m?(h?' ':'')+m+'m':''}</button>`).join('');
 $('#quickHours').onclick=e=>{const b=e.target.closest('button');if(!b)return;hf.h.value=b.dataset.h;hf.m.value=b.dataset.m};
 function hourDefaults(){hf.date.value=today();hf.who.value=meta.lastWho||'Dad'}
@@ -156,12 +173,12 @@ $('#csvHours').onclick=()=>{const l=filteredHours().reverse();download(`care-hou
 $('#copySheet').onclick=async()=>{const l=filteredHours().reverse();const tsv=l.map(x=>[x.date,x.who,x.type,x.hours,(x.notes||'').replace(/[\t\n]/g,' ')].join('\t')).join('\n');
   try{await navigator.clipboard.writeText(tsv);toast(`Copied ${l.length} rows — paste into the Sheet's Log tab`)}catch{download('hours-for-sheet.tsv',tsv,'text/tab-separated-values')}};
 $('#exportJson').onclick=()=>{const withPw=$('#bkPw').checked;const items=[].concat(...Object.values(S)).map(x=>x.kind==='accounts'&&!withPw?{...x,pwEnc:null}:x);
-  const m={types:meta.types};if(withPw)m.vault=meta.vault;download(`care-log-backup-${today()}.json`,JSON.stringify({app:'dad-dorie-care-log',version:1,exported:new Date().toISOString(),meta:m,items},null,1),'application/json');toast('Backup downloaded')};
+  const m={types:meta.types,roles:meta.roles};if(withPw)m.vault=meta.vault;download(`care-log-backup-${today()}.json`,JSON.stringify({app:'dad-dorie-care-log',version:1,exported:new Date().toISOString(),meta:m,items},null,1),'application/json');toast('Backup downloaded')};
 $('#importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(d.app!=='dad-dorie-care-log')throw 0;
   if(d.meta?.vault&&meta.vault&&d.meta.vault.salt!==meta.vault.salt&&d.items.some(x=>x.pwEnc))if(!confirm('This backup\'s passwords use a different passphrase. Replace this device\'s passphrase with the backup\'s? (Passwords saved only on this device would become unreadable.)'))d.items=d.items.map(x=>x.kind==='accounts'?{...x,pwEnc:null}:x);else await setMeta('vault',d.meta.vault);
   if(d.meta?.vault&&!meta.vault)await setMeta('vault',d.meta.vault);
   let n=0;const st=tx('items','readwrite');for(const it of d.items){const cur=S[it.kind]?.find(x=>x.id===it.id);if(!S[it.kind])continue;if(!cur||(it.updated||0)>(cur.updated||0)){const keep=it.kind==='accounts'&&!it.pwEnc&&cur?.pwEnc?{...it,pwEnc:cur.pwEnc}:it;st.put(keep);n++}}
-  await new Promise(r=>st.transaction.oncomplete=r);if(d.meta?.types)await setMeta('types',[...new Set([...meta.types,...d.meta.types])]);
+  await new Promise(r=>st.transaction.oncomplete=r);if(d.meta?.types)await setMeta('types',[...new Set([...meta.types,...d.meta.types])]);if(d.meta?.roles)await setMeta('roles',[...new Set([...meta.roles,...d.meta.roles])]);
   await loadAll();renderAll();toast(`Imported ${n} items`)}catch(err){console.error(err);toast('Not a valid Care Log backup')}e.target.value=''};
 
 /* ---------- Boot ---------- */

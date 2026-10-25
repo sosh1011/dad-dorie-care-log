@@ -22,3 +22,6 @@ Reminders pop up while the app is open or was recently open on that device, and 
 
 ## Files
 `index.html`, `app.js`, `styles.css`, `manifest.json`, `sw.js`, `icons/`. No build step. Serve the folder as a static site.
+
+## Editing dropdown lists
+Tap **✎ Edit list** next to *Task type* (or **✎ Edit suggestions** next to a contact's *Role*, or More → Dropdown lists) to add, rename, reorder, or delete options. Renaming a task type also updates past entries. Lists are saved on the device and included in backups.

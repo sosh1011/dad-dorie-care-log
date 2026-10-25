@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Dad &amp; Dorie Care Log</title>
-<meta name="theme-color" content="#2f6f73">
+<meta name="theme-color" content="#2a9d8f">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -29,7 +29,7 @@
       <label><input type="radio" name="who" value="Dorie"><span>Dorie</span></label>
       <label><input type="radio" name="who" value="Both"><span>Both</span></label>
     </fieldset>
-    <label>Task type<select name="type" id="typeSelect" required></select></label>
+    <div class="lblrow"><span>Task type</span><button type="button" class="link" data-manage="types">✎ Edit list</button></div><select name="type" id="typeSelect" required aria-label="Task type"></select><div class="gap"></div>
     <div class="row">
       <label>Hours<input type="number" name="h" min="0" max="24" step="1" inputmode="numeric" placeholder="0"></label>
       <label>Minutes<select name="m"><option>0</option><option>15</option><option>30</option><option>45</option></select></label>
@@ -63,8 +63,8 @@
   <form id="contactForm" class="card">
     <h2>Add contact</h2><input type="hidden" name="id">
     <label>Name<input name="name" required></label>
-    <label>Role<input name="role" list="roles" placeholder="e.g. DHS caseworker"></label>
-    <datalist id="roles"><option>DHS caseworker</option><option>Primary doctor</option><option>Neurologist</option><option>Pharmacy</option><option>Medicare / insurance</option><option>Bank</option><option>Attorney</option><option>Home care agency</option><option>Family</option></datalist>
+    <div class="lblrow"><span>Role</span><button type="button" class="link" data-manage="roles">✎ Edit suggestions</button></div><input name="role" list="roles" placeholder="e.g. DHS caseworker" aria-label="Role"><div class="gap"></div>
+    <datalist id="roles"></datalist>
     <div class="row"><label>Phone<input name="phone" type="tel"></label><label>Email<input name="email" type="email"></label></div>
     <label>Organization<input name="org"></label>
     <label>Notes<textarea name="notes" rows="2"></textarea></label>
@@ -123,8 +123,7 @@
     <p>Your Hours Sheet stays as a backup. Use <b>Copy hours for Sheet</b> on the Hours tab and paste into the Log tab at the first empty row — or ask your Hours bot to import the CSV.</p>
     <p><a href="https://docs.google.com/spreadsheets/d/1hxWimJHmOxVtuI9xkr9-BzU0PfoIwrAJjJ83qSuBcCY/edit" target="_blank" rel="noopener">Open Hours Sheet ↗</a></p>
   </div>
-  <div class="card"><h2>Task types</h2><ul id="typeList" class="list compact"></ul>
-    <form id="typeForm" class="row"><input name="t" placeholder="New task type" required><button>Add</button></form></div>
+  <div class="card"><h2>Dropdown lists</h2><div class="actions wrap"><button type="button" data-manage="types">Edit task types</button><button type="button" data-manage="roles">Edit contact roles</button></div></div>
   <div class="card"><h2>Notifications</h2><p id="notifState" class="muted"></p><button id="notifBtn">Enable reminders</button></div>
 </section>
 </main>
@@ -135,6 +134,13 @@
   <button data-view="accounts"><span>🔒</span>Logins</button>
   <button data-view="more"><span>⋯</span>More</button>
 </nav>
+<dialog id="mgr" aria-labelledby="mgrTitle"><form method="dialog" class="mgr">
+  <h2 id="mgrTitle">Edit list</h2>
+  <ul id="mgrList" class="list compact"></ul>
+  <div class="row addrow"><input id="mgrNew" placeholder="Add a new option" aria-label="New option"><button type="button" id="mgrAdd" class="primary">Add</button></div>
+  <p class="muted small">Renaming a task type also updates past entries that use it.</p>
+  <div class="actions"><button type="button" id="mgrReset" class="ghost">Restore defaults</button><button class="primary big" value="done">Done</button></div>
+</form></dialog>
 <div id="print" class="print-only"></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="app.js"></script>
