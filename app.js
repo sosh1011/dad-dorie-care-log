@@ -1,12 +1,14 @@
 'use strict';
 /* Dad & Dorie Care Log — all data stays in this browser (IndexedDB). */
-const DEFAULT_TYPES=['Medical appointments','Medications','Insurance / Medicare','DHS appointment','DHS contact','DHS / caseworker','Emergency room trip','Banking / finances','Legal / paperwork','Shopping / errands','Home care / safety','Phone / email coordination','Transport','Other'];
+const DEFAULT_TYPES=['Medical appointments','Medications','Insurance / Medicare','DHS appointment','DHS contact','DHS / caseworker','Emergency room trip','Visit/checkout facility','Banking / finances','Legal / paperwork','Shopping / errands','Home care / safety','Phone / email coordination','Transport','Other'];
 const DEFAULT_ROLES=['DHS caseworker','Primary doctor','Neurologist','Pharmacy','Medicare / insurance','Bank','Attorney','Home care agency','Family'];
 const isDhs=t=>/dhs/i.test(t||'')&&/appoint|appt|contact|caseworker|case worker|visit|call|meeting/i.test(t);
 const isMed=t=>/medical appoint|medical appt/i.test(t||'');
 const isRx=t=>/medication/i.test(t||'');
+const isFac=t=>/facility/i.test(t||'')&&/visit|check ?out/i.test(t);
+const isBank=t=>/banking|finance/i.test(t||'');
 const isEr=t=>/emergency|\ber\b/i.test(t||'');
-const extras=x=>[x.caseNo&&'Case # '+x.caseNo,x.talkedTo&&'Talked to '+x.talkedTo,x.hospital&&'Hospital: '+x.hospital,x.clinic&&'Clinic: '+x.clinic,x.medication&&'Medication: '+x.medication].filter(Boolean).join(' · ');
+const extras=x=>[x.caseNo&&'Case # '+x.caseNo,x.talkedTo&&'Talked to '+x.talkedTo,x.hospital&&'Hospital: '+x.hospital,x.clinic&&'Clinic: '+x.clinic,x.medication&&'Medication: '+x.medication,x.facility&&'Facility: '+x.facility,x.bill&&'Bill: '+x.bill].filter(Boolean).join(' · ');
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -26,7 +28,8 @@ const req=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=
 async function loadAll(){const all=await req(tx('items','readonly').getAll());for(const k in S)S[k]=[];for(const it of all)if(S[it.kind])S[it.kind].push(it);
   const st=tx('meta','readonly');const keys=await req(st.getAllKeys()),vals=await req(tx('meta','readonly').getAll());meta={};keys.forEach((k,i)=>meta[k]=vals[i]);
   if(!meta.types)await setMeta('types',DEFAULT_TYPES.slice());if(!meta.roles)await setMeta('roles',DEFAULT_ROLES.slice());
-  if(!meta.typesV2){const t=meta.types.slice();for(const n of ['DHS appointment','DHS contact','Emergency room trip'])if(!t.some(x=>x.toLowerCase()===n.toLowerCase())){const o=t.indexOf('Other');o>=0?t.splice(o,0,n):t.push(n)}await setMeta('types',t);await setMeta('typesV2',true)}}
+  if(!meta.typesV2){const t=meta.types.slice();for(const n of ['DHS appointment','DHS contact','Emergency room trip'])if(!t.some(x=>x.toLowerCase()===n.toLowerCase())){const o=t.indexOf('Other');o>=0?t.splice(o,0,n):t.push(n)}await setMeta('types',t);await setMeta('typesV2',true)}
+  if(!meta.typesV3){const t=meta.types.slice();if(!t.some(isFac)){const o=t.indexOf('Other');o>=0?t.splice(o,0,'Visit/checkout facility'):t.push('Visit/checkout facility')}await setMeta('types',t);await setMeta('typesV3',true)}}
 async function put(it){it.updated=Date.now();await req(tx('items','readwrite').put(it));const a=S[it.kind];const i=a.findIndex(x=>x.id===it.id);i>=0?a[i]=it:a.push(it)}
 async function del(it){await put({...it,deleted:true})}/* tombstone so import/merge keeps deletions */
 async function setMeta(k,v){meta[k]=v;await req(tx('meta','readwrite').put(v,k))}
@@ -69,11 +72,11 @@ $('#mgrReset').onclick=async()=>{if(!confirm('Restore the default list? Your cus
 $('#mgr').addEventListener('close',()=>{const sel=$('#typeSelect');if(mk==='types'&&!sel.value&&hf.elements.id.value==='')sel.selectedIndex=0});
 $('#quickHours').innerHTML=[[0,15],[0,30],[1,0],[1,30],[2,0],[3,0]].map(([h,m])=>`<button type="button" data-h="${h}" data-m="${m}">${h?h+'h':''}${m?(h?' ':'')+m+'m':''}</button>`).join('');
 $('#quickHours').onclick=e=>{const b=e.target.closest('button');if(!b)return;hf.h.value=b.dataset.h;hf.m.value=b.dataset.m};
-function toggleExtras(){const t=$('#typeSelect').value;$('#xDhs').hidden=!isDhs(t);$('#xEr').hidden=!isEr(t);$('#xMed').hidden=!isMed(t);$('#xRx').hidden=!isRx(t)}
+function toggleExtras(){const t=$('#typeSelect').value;$('#xDhs').hidden=!isDhs(t);$('#xEr').hidden=!isEr(t);$('#xMed').hidden=!isMed(t);$('#xRx').hidden=!isRx(t);$('#xFac').hidden=!isFac(t);$('#xBank').hidden=!isBank(t)}
 $('#typeSelect').addEventListener('change',toggleExtras);
 function hourDefaults(){toggleExtras();hf.date.value=today();hf.who.value=meta.lastWho||'Dad'}
 hf.onsubmit=async e=>{e.preventDefault();const d=formData(hf);const hours=(+d.h||0)+(+d.m||0)/60;if(!hours){toast('Enter hours or minutes');hf.h.focus();return}
-  const old=S.hours.find(x=>x.id===d.id);await put({...(old||{}),id:d.id||uid(),kind:'hours',date:d.date,who:d.who,type:d.type,hours:Math.round(hours*100)/100,notes:d.notes.trim(),caseNo:isDhs(d.type)?d.caseNo.trim():'',talkedTo:isDhs(d.type)?d.talkedTo.trim():'',hospital:isEr(d.type)?d.hospital.trim():'',clinic:isMed(d.type)?d.clinic.trim():'',medication:isRx(d.type)?d.medication.trim():''});
+  const old=S.hours.find(x=>x.id===d.id);await put({...(old||{}),id:d.id||uid(),kind:'hours',date:d.date,who:d.who,type:d.type,hours:Math.round(hours*100)/100,notes:d.notes.trim(),caseNo:isDhs(d.type)?d.caseNo.trim():'',talkedTo:isDhs(d.type)?d.talkedTo.trim():'',hospital:isEr(d.type)?d.hospital.trim():'',clinic:isMed(d.type)?d.clinic.trim():'',medication:isRx(d.type)?d.medication.trim():'',facility:isFac(d.type)?d.facility.trim():'',bill:isBank(d.type)?d.bill.trim():''});
   await setMeta('lastWho',d.who);resetForm(hf);hourDefaults();renderHours();toast(old?'Entry updated':'Saved ✓')};
 $('#hourCancel').onclick=()=>{resetForm(hf);hourDefaults()};
 function filteredHours(){const f=$('#fFrom').value,t=$('#fTo').value,w=$('#fWho').value,ty=$('#fType').value;
@@ -177,7 +180,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-prin
 /* ---------- CSV / Sheet / Backup ---------- */
 const csvCell=v=>/[",\n]/.test(v=String(v??''))?`"${v.replace(/"/g,'""')}"`:v;
 function download(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
-$('#csvHours').onclick=()=>{const l=filteredHours().reverse();download(`care-hours-${today()}.csv`,'Date,Who,Activity,Hours,Notes,Case #,Talked to,Hospital,Clinic,Medication\n'+l.map(x=>[x.date,x.who,x.type,x.hours,x.notes,x.caseNo,x.talkedTo,x.hospital,x.clinic,x.medication].map(csvCell).join(',')).join('\n'),'text/csv')};
+$('#csvHours').onclick=()=>{const l=filteredHours().reverse();download(`care-hours-${today()}.csv`,'Date,Who,Activity,Hours,Notes,Case #,Talked to,Hospital,Clinic,Medication,Facility,Related bill\n'+l.map(x=>[x.date,x.who,x.type,x.hours,x.notes,x.caseNo,x.talkedTo,x.hospital,x.clinic,x.medication,x.facility,x.bill].map(csvCell).join(',')).join('\n'),'text/csv')};
 $('#copySheet').onclick=async()=>{const l=filteredHours().reverse();const tsv=l.map(x=>[x.date,x.who,x.type,x.hours,[extras(x),x.notes].filter(Boolean).join(' — ').replace(/[\t\n]/g,' ')].join('\t')).join('\n');
   try{await navigator.clipboard.writeText(tsv);toast(`Copied ${l.length} rows — paste into the Sheet's Log tab`)}catch{download('hours-for-sheet.tsv',tsv,'text/tab-separated-values')}};
 $('#exportJson').onclick=()=>{const withPw=$('#bkPw').checked;const items=[].concat(...Object.values(S)).map(x=>x.kind==='accounts'&&!withPw?{...x,pwEnc:null}:x);
