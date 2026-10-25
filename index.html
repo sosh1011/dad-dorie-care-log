@@ -30,6 +30,8 @@
       <label><input type="radio" name="who" value="Both"><span>Both</span></label>
     </fieldset>
     <div class="lblrow"><span>Task type</span><button type="button" class="link" data-manage="types">✎ Edit list</button></div><select name="type" id="typeSelect" required aria-label="Task type"></select><div class="gap"></div>
+    <div id="xDhs" class="extra" hidden><div class="row"><label>Case #<input name="caseNo" autocomplete="off"></label><label>Who I talked to<input name="talkedTo" autocomplete="off" placeholder="Name"></label></div></div>
+    <div id="xEr" class="extra" hidden><label>Hospital name<input name="hospital" autocomplete="off"></label></div>
     <div class="row">
       <label>Hours<input type="number" name="h" min="0" max="24" step="1" inputmode="numeric" placeholder="0"></label>
       <label>Minutes<select name="m"><option>0</option><option>15</option><option>30</option><option>45</option></select></label>

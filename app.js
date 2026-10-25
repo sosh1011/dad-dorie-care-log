@@ -1,7 +1,10 @@
 'use strict';
 /* Dad & Dorie Care Log — all data stays in this browser (IndexedDB). */
-const DEFAULT_TYPES=['Medical appointments','Medications','Insurance / Medicare','DHS / caseworker','Banking / finances','Legal / paperwork','Shopping / errands','Home care / safety','Phone / email coordination','Transport','Other'];
+const DEFAULT_TYPES=['Medical appointments','Medications','Insurance / Medicare','DHS appointment','DHS contact','DHS / caseworker','Emergency room trip','Banking / finances','Legal / paperwork','Shopping / errands','Home care / safety','Phone / email coordination','Transport','Other'];
 const DEFAULT_ROLES=['DHS caseworker','Primary doctor','Neurologist','Pharmacy','Medicare / insurance','Bank','Attorney','Home care agency','Family'];
+const isDhs=t=>/dhs/i.test(t||'')&&/appoint|appt|contact|caseworker|case worker|visit|call|meeting/i.test(t);
+const isEr=t=>/emergency|\ber\b/i.test(t||'');
+const extras=x=>[x.caseNo&&'Case # '+x.caseNo,x.talkedTo&&'Talked to '+x.talkedTo,x.hospital&&'Hospital: '+x.hospital].filter(Boolean).join(' · ');
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -20,7 +23,8 @@ const tx=(st,mode)=>db.transaction(st,mode).objectStore(st);
 const req=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 async function loadAll(){const all=await req(tx('items','readonly').getAll());for(const k in S)S[k]=[];for(const it of all)if(S[it.kind])S[it.kind].push(it);
   const st=tx('meta','readonly');const keys=await req(st.getAllKeys()),vals=await req(tx('meta','readonly').getAll());meta={};keys.forEach((k,i)=>meta[k]=vals[i]);
-  if(!meta.types)await setMeta('types',DEFAULT_TYPES.slice());if(!meta.roles)await setMeta('roles',DEFAULT_ROLES.slice())}
+  if(!meta.types)await setMeta('types',DEFAULT_TYPES.slice());if(!meta.roles)await setMeta('roles',DEFAULT_ROLES.slice());
+  if(!meta.typesV2){const t=meta.types.slice();for(const n of ['DHS appointment','DHS contact','Emergency room trip'])if(!t.some(x=>x.toLowerCase()===n.toLowerCase())){const o=t.indexOf('Other');o>=0?t.splice(o,0,n):t.push(n)}await setMeta('types',t);await setMeta('typesV2',true)}}
 async function put(it){it.updated=Date.now();await req(tx('items','readwrite').put(it));const a=S[it.kind];const i=a.findIndex(x=>x.id===it.id);i>=0?a[i]=it:a.push(it)}
 async function del(it){await put({...it,deleted:true})}/* tombstone so import/merge keeps deletions */
 async function setMeta(k,v){meta[k]=v;await req(tx('meta','readwrite').put(v,k))}
@@ -63,9 +67,11 @@ $('#mgrReset').onclick=async()=>{if(!confirm('Restore the default list? Your cus
 $('#mgr').addEventListener('close',()=>{const sel=$('#typeSelect');if(mk==='types'&&!sel.value&&hf.elements.id.value==='')sel.selectedIndex=0});
 $('#quickHours').innerHTML=[[0,15],[0,30],[1,0],[1,30],[2,0],[3,0]].map(([h,m])=>`<button type="button" data-h="${h}" data-m="${m}">${h?h+'h':''}${m?(h?' ':'')+m+'m':''}</button>`).join('');
 $('#quickHours').onclick=e=>{const b=e.target.closest('button');if(!b)return;hf.h.value=b.dataset.h;hf.m.value=b.dataset.m};
-function hourDefaults(){hf.date.value=today();hf.who.value=meta.lastWho||'Dad'}
+function toggleExtras(){const t=$('#typeSelect').value;$('#xDhs').hidden=!isDhs(t);$('#xEr').hidden=!isEr(t)}
+$('#typeSelect').addEventListener('change',toggleExtras);
+function hourDefaults(){toggleExtras();hf.date.value=today();hf.who.value=meta.lastWho||'Dad'}
 hf.onsubmit=async e=>{e.preventDefault();const d=formData(hf);const hours=(+d.h||0)+(+d.m||0)/60;if(!hours){toast('Enter hours or minutes');hf.h.focus();return}
-  const old=S.hours.find(x=>x.id===d.id);await put({...(old||{}),id:d.id||uid(),kind:'hours',date:d.date,who:d.who,type:d.type,hours:Math.round(hours*100)/100,notes:d.notes.trim()});
+  const old=S.hours.find(x=>x.id===d.id);await put({...(old||{}),id:d.id||uid(),kind:'hours',date:d.date,who:d.who,type:d.type,hours:Math.round(hours*100)/100,notes:d.notes.trim(),caseNo:isDhs(d.type)?d.caseNo.trim():'',talkedTo:isDhs(d.type)?d.talkedTo.trim():'',hospital:isEr(d.type)?d.hospital.trim():''});
   await setMeta('lastWho',d.who);resetForm(hf);hourDefaults();renderHours();toast(old?'Entry updated':'Saved ✓')};
 $('#hourCancel').onclick=()=>{resetForm(hf);hourDefaults()};
 function filteredHours(){const f=$('#fFrom').value,t=$('#fTo').value,w=$('#fWho').value,ty=$('#fType').value;
@@ -74,12 +80,12 @@ function weekStart(){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7)
 function renderHours(){const all=live('hours'),sum=a=>a.reduce((s,x)=>s+x.hours,0),t=today(),w=weekStart();
   $('#totals').innerHTML=`<div><b>${+sum(all.filter(x=>x.date===t)).toFixed(2)}</b><span>Today</span></div><div><b>${+sum(all.filter(x=>x.date>=w)).toFixed(2)}</b><span>This week</span></div><div><b>${+sum(all).toFixed(2)}</b><span>All time</span></div>`;
   const list=filteredHours();$('#fSum').textContent=`${list.length} entr${list.length==1?'y':'ies'} · ${fmtH(sum(list))}`;
-  $('#hourList').innerHTML=list.map(x=>`<li><div class="body"><div><b>${esc(x.type)}</b> · ${esc(x.who)}</div><div class="meta">${fmtDate(x.date)}${x.notes?' — '+esc(x.notes):''}</div></div><span class="hrs">${x.hours} h</span><div class="tools"><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Delete</button></div></li>`).join('')||'<li class="muted">No entries yet.</li>'}
+  $('#hourList').innerHTML=list.map(x=>`<li><div class="body"><div><b>${esc(x.type)}</b> · ${esc(x.who)}</div><div class="meta">${fmtDate(x.date)}${extras(x)?' · '+esc(extras(x)):''}${x.notes?' — '+esc(x.notes):''}</div></div><span class="hrs">${x.hours} h</span><div class="tools"><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Delete</button></div></li>`).join('')||'<li class="muted">No entries yet.</li>'}
 $('#hourList').onclick=async e=>{const id=e.target.dataset.ed||e.target.dataset.del;const x=S.hours.find(i=>i.id===id);if(!x)return;
   if(e.target.dataset.del){if(confirm('Delete this entry?')){await del(x);renderHours();toast('Deleted')}return}
   if(!meta.types.includes(x.type))$('#typeSelect').insertAdjacentHTML('beforeend',`<option>${esc(x.type)}</option>`);
   const H=Math.floor(x.hours),M=Math.round((x.hours-H)*60);fill(hf,{...x,h:H||'',m:[0,15,30,45].includes(M)?M:0});
-  if(![0,15,30,45].includes(M)){hf.m.insertAdjacentHTML('beforeend',`<option>${M}</option>`);hf.m.value=M}editMode(hf,true)};
+  toggleExtras();if(![0,15,30,45].includes(M)){hf.m.insertAdjacentHTML('beforeend',`<option>${M}</option>`);hf.m.value=M}editMode(hf,true)};
 ['#fFrom','#fTo','#fWho','#fType'].forEach(s=>$(s).onchange=renderHours);
 
 /* ---------- Contacts ---------- */
@@ -150,8 +156,8 @@ function report(kind){const inclPw=$('#inclPw').checked&&!!key;const stamp=new D
   if(kind==='hours'){const l=filteredHours(),tot=l.reduce((s,x)=>s+x.hours,0),f=$('#fFrom').value,t=$('#fTo').value;
     const byType={};l.forEach(x=>byType[x.type]=(byType[x.type]||0)+x.hours);
     const title=`Care hours — Dad & Dorie${f||t?` (${f||'start'} to ${t||'today'})`:''}`;
-    return{title,text:`${title}\nTotal: ${fmtH(tot)} in ${l.length} entries\n\nBy task:\n${Object.entries(byType).map(([k,v])=>`  ${k}: ${+v.toFixed(2)} h`).join('\n')}\n\nEntries:\n${l.map(x=>`${x.date} | ${x.who} | ${x.type} | ${x.hours} h${x.notes?' | '+x.notes:''}`).join('\n')}`,
-      html:`<h1>${esc(title)}</h1><p>Total <b>${fmtH(tot)}</b> · ${l.length} entries · printed ${stamp}</p><table><tr><th>Date</th><th>Who</th><th>Task</th><th>Hours</th><th>Notes</th></tr>${l.map(x=>`<tr><td>${x.date}</td><td>${esc(x.who)}</td><td>${esc(x.type)}</td><td>${x.hours}</td><td>${esc(x.notes)}</td></tr>`).join('')}</table><h3>By task</h3><table>${Object.entries(byType).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${+v.toFixed(2)} h</td></tr>`).join('')}</table>`}}
+    return{title,text:`${title}\nTotal: ${fmtH(tot)} in ${l.length} entries\n\nBy task:\n${Object.entries(byType).map(([k,v])=>`  ${k}: ${+v.toFixed(2)} h`).join('\n')}\n\nEntries:\n${l.map(x=>`${x.date} | ${x.who} | ${x.type} | ${x.hours} h${extras(x)?' | '+extras(x):''}${x.notes?' | '+x.notes:''}`).join('\n')}`,
+      html:`<h1>${esc(title)}</h1><p>Total <b>${fmtH(tot)}</b> · ${l.length} entries · printed ${stamp}</p><table><tr><th>Date</th><th>Who</th><th>Task</th><th>Hours</th><th>Details</th><th>Notes</th></tr>${l.map(x=>`<tr><td>${x.date}</td><td>${esc(x.who)}</td><td>${esc(x.type)}</td><td>${x.hours}</td><td>${esc(extras(x))}</td><td>${esc(x.notes)}</td></tr>`).join('')}</table><h3>By task</h3><table>${Object.entries(byType).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${+v.toFixed(2)} h</td></tr>`).join('')}</table>`}}
   if(kind==='contacts'){const l=live('contacts').sort((a,b)=>a.name.localeCompare(b.name));const title='Important contacts — Dad & Dorie';
     return{title,text:`${title}\n\n${l.map(x=>[x.name+(x.role?` (${x.role})`:''),x.org,x.phone&&'Phone: '+x.phone,x.email&&'Email: '+x.email,x.notes].filter(Boolean).join('\n')).join('\n\n')}`,
       html:`<h1>${title}</h1><p>Printed ${stamp}</p><table><tr><th>Name</th><th>Role</th><th>Org</th><th>Phone</th><th>Email</th><th>Notes</th></tr>${l.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.role)}</td><td>${esc(x.org)}</td><td>${esc(x.phone)}</td><td>${esc(x.email)}</td><td>${esc(x.notes)}</td></tr>`).join('')}</table>`}}
@@ -169,8 +175,8 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-prin
 /* ---------- CSV / Sheet / Backup ---------- */
 const csvCell=v=>/[",\n]/.test(v=String(v??''))?`"${v.replace(/"/g,'""')}"`:v;
 function download(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
-$('#csvHours').onclick=()=>{const l=filteredHours().reverse();download(`care-hours-${today()}.csv`,'Date,Who,Activity,Hours,Notes\n'+l.map(x=>[x.date,x.who,x.type,x.hours,x.notes].map(csvCell).join(',')).join('\n'),'text/csv')};
-$('#copySheet').onclick=async()=>{const l=filteredHours().reverse();const tsv=l.map(x=>[x.date,x.who,x.type,x.hours,(x.notes||'').replace(/[\t\n]/g,' ')].join('\t')).join('\n');
+$('#csvHours').onclick=()=>{const l=filteredHours().reverse();download(`care-hours-${today()}.csv`,'Date,Who,Activity,Hours,Notes,Case #,Talked to,Hospital\n'+l.map(x=>[x.date,x.who,x.type,x.hours,x.notes,x.caseNo,x.talkedTo,x.hospital].map(csvCell).join(',')).join('\n'),'text/csv')};
+$('#copySheet').onclick=async()=>{const l=filteredHours().reverse();const tsv=l.map(x=>[x.date,x.who,x.type,x.hours,[extras(x),x.notes].filter(Boolean).join(' — ').replace(/[\t\n]/g,' ')].join('\t')).join('\n');
   try{await navigator.clipboard.writeText(tsv);toast(`Copied ${l.length} rows — paste into the Sheet's Log tab`)}catch{download('hours-for-sheet.tsv',tsv,'text/tab-separated-values')}};
 $('#exportJson').onclick=()=>{const withPw=$('#bkPw').checked;const items=[].concat(...Object.values(S)).map(x=>x.kind==='accounts'&&!withPw?{...x,pwEnc:null}:x);
   const m={types:meta.types,roles:meta.roles};if(withPw)m.vault=meta.vault;download(`care-log-backup-${today()}.json`,JSON.stringify({app:'dad-dorie-care-log',version:1,exported:new Date().toISOString(),meta:m,items},null,1),'application/json');toast('Backup downloaded')};

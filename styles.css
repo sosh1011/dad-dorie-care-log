@@ -104,3 +104,4 @@ button.big{background:linear-gradient(120deg,#5d4a9c,#4a6fb0);box-shadow:0 4px 1
 input:focus,select:focus,textarea:focus,button:focus-visible{outline-color:#cbbff0;border-color:var(--teal)}
 .card.warn{background:#fdf6e3;border-color:#e3cf9c}
 @media (min-width:900px){.tabs button[aria-current]{box-shadow:inset 3px 0 0 #c9a24f}}
+.extra{background:#f6f2fd;border:1px dashed #cfc3ea;border-radius:16px;padding:12px 12px 0;margin:-2px 0 14px}
