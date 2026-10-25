@@ -1,4 +1,5 @@
 :root{--bg:#f3f6f7;--card:#fff;--ink:#1f2d33;--muted:#5b6b72;--line:#d6e0e3;--teal:#2f6f73;--teal2:#e3f0f0;--warn:#fff6e0;--red:#a23b3b;--r:14px}
+[hidden]{display:none!important}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;font:17px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:calc(84px + env(safe-area-inset-bottom))}
