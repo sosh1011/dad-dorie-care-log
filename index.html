@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dad &amp; Dorie Care Log</title>
+<meta name="theme-color" content="#2f6f73">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Care Log">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <h1>Dad &amp; Dorie Care Log</h1>
+  <div id="banner" class="banner" hidden></div>
+</header>
+<main id="main">
+<!-- HOURS -->
+<section id="v-hours" class="view">
+  <form id="hourForm" class="card">
+    <h2 id="hourFormTitle">Log hours</h2>
+    <input type="hidden" name="id">
+    <label>Date<input type="date" name="date" required></label>
+    <fieldset class="seg"><legend>Who</legend>
+      <label><input type="radio" name="who" value="Dad" checked><span>Dad</span></label>
+      <label><input type="radio" name="who" value="Dorie"><span>Dorie</span></label>
+      <label><input type="radio" name="who" value="Both"><span>Both</span></label>
+    </fieldset>
+    <label>Task type<select name="type" id="typeSelect" required></select></label>
+    <div class="row">
+      <label>Hours<input type="number" name="h" min="0" max="24" step="1" inputmode="numeric" placeholder="0"></label>
+      <label>Minutes<select name="m"><option>0</option><option>15</option><option>30</option><option>45</option></select></label>
+    </div>
+    <div class="chips" id="quickHours"></div>
+    <label>Notes (optional)<textarea name="notes" rows="2"></textarea></label>
+    <div class="actions"><button class="primary big" type="submit">Save</button><button type="button" id="hourCancel" class="ghost" hidden>Cancel edit</button></div>
+  </form>
+  <div class="totals card" id="totals"></div>
+  <div class="card">
+    <h2>History</h2>
+    <div class="filters">
+      <label>From<input type="date" id="fFrom"></label>
+      <label>To<input type="date" id="fTo"></label>
+      <label>Who<select id="fWho"><option value="">All</option><option>Dad</option><option>Dorie</option><option>Both</option></select></label>
+      <label>Type<select id="fType"><option value="">All</option></select></label>
+    </div>
+    <p id="fSum" class="muted"></p>
+    <ul id="hourList" class="list"></ul>
+    <div class="actions wrap">
+      <button type="button" data-print="hours">Print report</button>
+      <button type="button" data-gmail="hours">Email via Gmail</button>
+      <button type="button" data-share="hours">Share…</button>
+      <button type="button" id="csvHours">Download CSV</button>
+      <button type="button" id="copySheet">Copy hours for Sheet</button>
+    </div>
+  </div>
+</section>
+<!-- CONTACTS -->
+<section id="v-contacts" class="view" hidden>
+  <form id="contactForm" class="card">
+    <h2>Add contact</h2><input type="hidden" name="id">
+    <label>Name<input name="name" required></label>
+    <label>Role<input name="role" list="roles" placeholder="e.g. DHS caseworker"></label>
+    <datalist id="roles"><option>DHS caseworker</option><option>Primary doctor</option><option>Neurologist</option><option>Pharmacy</option><option>Medicare / insurance</option><option>Bank</option><option>Attorney</option><option>Home care agency</option><option>Family</option></datalist>
+    <div class="row"><label>Phone<input name="phone" type="tel"></label><label>Email<input name="email" type="email"></label></div>
+    <label>Organization<input name="org"></label>
+    <label>Notes<textarea name="notes" rows="2"></textarea></label>
+    <div class="actions"><button class="primary big">Save contact</button><button type="button" class="ghost cancel" hidden>Cancel edit</button></div>
+  </form>
+  <div class="card"><h2>Contacts</h2><ul id="contactList" class="list"></ul>
+    <div class="actions wrap"><button data-print="contacts">Print</button><button data-gmail="contacts">Email via Gmail</button><button data-share="contacts">Share…</button></div></div>
+</section>
+<!-- ACCOUNTS -->
+<section id="v-accounts" class="view" hidden>
+  <div class="card warn"><strong>Private.</strong> Passwords stay only on this device, encrypted with your passphrase. They are never sent anywhere. Don't email passwords — if you forget the passphrase, saved passwords can't be recovered.</div>
+  <div id="lockBox" class="card">
+    <h2 id="lockTitle">Unlock accounts</h2>
+    <form id="lockForm"><label>Passphrase<input type="password" name="pass" required autocomplete="current-password"></label>
+    <label id="pass2Wrap" hidden>Confirm passphrase<input type="password" name="pass2" autocomplete="new-password"></label>
+    <button class="primary big">Unlock</button></form>
+  </div>
+  <div id="acctArea" hidden>
+    <form id="acctForm" class="card"><h2>Add account</h2><input type="hidden" name="id">
+      <label>Site / service<input name="site" required></label>
+      <label>URL<input name="url" type="url" placeholder="https://"></label>
+      <label>Username<input name="user" autocomplete="off"></label>
+      <label>Password<input name="pw" type="password" autocomplete="new-password"></label>
+      <label>Notes<textarea name="notes" rows="2"></textarea></label>
+      <div class="actions"><button class="primary big">Save account</button><button type="button" class="ghost cancel" hidden>Cancel edit</button></div>
+    </form>
+    <div class="card"><h2>Accounts</h2><ul id="acctList" class="list"></ul>
+      <label class="check"><input type="checkbox" id="inclPw"> Include passwords in print/email (not recommended)</label>
+      <div class="actions wrap"><button data-print="accounts">Print</button><button data-gmail="accounts">Email via Gmail</button><button id="lockNow" class="ghost">Lock</button></div></div>
+  </div>
+</section>
+<!-- APPOINTMENTS -->
+<section id="v-appts" class="view" hidden>
+  <form id="apptForm" class="card"><h2>Add appointment</h2><input type="hidden" name="id">
+    <label>Title<input name="title" required placeholder="e.g. Neurology follow-up"></label>
+    <label>Person<select name="person"><option>Dad</option><option>Dorie</option><option>Both</option><option>Other</option></select></label>
+    <label>Date &amp; time<input type="datetime-local" name="when" required></label>
+    <label>Location<input name="loc"></label>
+    <label>Reminder<select name="remind"><option value="15">15 min before</option><option value="30">30 min before</option><option value="60" selected>1 hour before</option><option value="1440">1 day before</option><option value="0">None</option></select></label>
+    <label>Notes<textarea name="notes" rows="2"></textarea></label>
+    <div class="actions"><button class="primary big">Save appointment</button><button type="button" class="ghost cancel" hidden>Cancel edit</button></div>
+    <p class="muted small">Reminders pop up while this app is open (or recently open) on this device. For critical appointments, also add them to your phone calendar.</p>
+  </form>
+  <div class="card"><h2>Upcoming</h2><ul id="apptList" class="list"></ul>
+    <div class="actions wrap"><button data-print="appts">Print</button><button data-gmail="appts">Email via Gmail</button><button data-share="appts">Share…</button></div></div>
+</section>
+<!-- MORE -->
+<section id="v-more" class="view" hidden>
+  <div class="card"><h2>Backup &amp; sync</h2>
+    <p>Data lives on this device. To move between laptop and phone, export a backup here and import it on the other device (or email it to yourself).</p>
+    <label class="check"><input type="checkbox" id="bkPw"> Include encrypted passwords in backup</label>
+    <div class="actions wrap"><button class="primary" id="exportJson">Export backup (JSON)</button><label class="btn">Import backup<input type="file" id="importFile" accept=".json,application/json" hidden></label></div>
+    <p class="muted small">Import merges by entry — newer edits win, nothing is lost.</p>
+  </div>
+  <div class="card"><h2>Google Sheet</h2>
+    <p>Your Hours Sheet stays as a backup. Use <b>Copy hours for Sheet</b> on the Hours tab and paste into the Log tab at the first empty row — or ask your Hours bot to import the CSV.</p>
+    <p><a href="https://docs.google.com/spreadsheets/d/1hxWimJHmOxVtuI9xkr9-BzU0PfoIwrAJjJ83qSuBcCY/edit" target="_blank" rel="noopener">Open Hours Sheet ↗</a></p>
+  </div>
+  <div class="card"><h2>Task types</h2><ul id="typeList" class="list compact"></ul>
+    <form id="typeForm" class="row"><input name="t" placeholder="New task type" required><button>Add</button></form></div>
+  <div class="card"><h2>Notifications</h2><p id="notifState" class="muted"></p><button id="notifBtn">Enable reminders</button></div>
+</section>
+</main>
+<nav class="tabs" aria-label="Sections">
+  <button data-view="hours" aria-current="page"><span>⏱</span>Hours</button>
+  <button data-view="appts"><span>📅</span>Appts</button>
+  <button data-view="contacts"><span>👥</span>People</button>
+  <button data-view="accounts"><span>🔒</span>Logins</button>
+  <button data-view="more"><span>⋯</span>More</button>
+</nav>
+<div id="print" class="print-only"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
