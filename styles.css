@@ -105,3 +105,10 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline-color:#cbbf
 .card.warn{background:#fdf6e3;border-color:#e3cf9c}
 @media (min-width:900px){.tabs button[aria-current]{box-shadow:inset 3px 0 0 #c9a24f}}
 .extra{background:#f6f2fd;border:1px dashed #cfc3ea;border-radius:16px;padding:12px 12px 0;margin:-2px 0 14px}
+/* Art inside form cards */
+.card,dialog{background:linear-gradient(rgba(255,253,248,.8),rgba(255,253,248,.87)),url(assets/theme.jpg) center/cover;background-attachment:scroll}
+.card:not(.totals):not(.warn){background-color:#fff}
+input,select,textarea{background:rgba(255,255,255,.96)}
+.seg span{background:rgba(255,255,255,.94)}
+.extra{background:rgba(246,242,253,.9)}
+@media print{.card,dialog{background:#fff}}
