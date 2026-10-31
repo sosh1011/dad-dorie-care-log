@@ -20,7 +20,7 @@
 <main id="main">
 <!-- HOURS -->
 <section id="v-hours" class="view">
-  <form id="hourForm" class="card">
+  <form id="hourForm" novalidate class="card">
     <h2 id="hourFormTitle">Log hours</h2>
     <input type="hidden" name="id">
     <label>Date<input type="date" name="date" required></label>
@@ -37,7 +37,7 @@
     <div id="xBank" class="extra" hidden><label>Related bill<input name="bill" autocomplete="off" placeholder="Which bill?"></label></div>
     <div id="xEr" class="extra" hidden><label>Hospital name<input name="hospital" autocomplete="off"></label></div>
     <div class="row">
-      <label>Hours<input type="number" name="h" min="0" max="24" step="1" inputmode="numeric" placeholder="0"></label>
+      <label>Hours<input type="text" name="h" inputmode="decimal" autocomplete="off" placeholder="0 (e.g. 1.5)"></label>
       <label>Minutes<select name="m"><option>0</option><option>15</option><option>30</option><option>45</option></select></label>
     </div>
     <div class="chips" id="quickHours"></div>
@@ -66,12 +66,12 @@
 </section>
 <!-- CONTACTS -->
 <section id="v-contacts" class="view" hidden>
-  <form id="contactForm" class="card">
+  <form id="contactForm" novalidate class="card">
     <h2>Add contact</h2><input type="hidden" name="id">
     <label>Name<input name="name" required></label>
     <div class="lblrow"><span>Role</span><button type="button" class="link" data-manage="roles">✎ Edit suggestions</button></div><input name="role" list="roles" placeholder="e.g. DHS caseworker" aria-label="Role"><div class="gap"></div>
     <datalist id="roles"></datalist>
-    <div class="row"><label>Phone<input name="phone" type="tel"></label><label>Email<input name="email" type="email"></label></div>
+    <div class="row"><label>Phone<input name="phone" type="tel"></label><label>Email<input name="email" type="text" inputmode="email" autocapitalize="off" autocomplete="off"></label></div>
     <label>Organization<input name="org"></label>
     <label>Notes<textarea name="notes" rows="2"></textarea></label>
     <div class="actions"><button class="primary big">Save contact</button><button type="button" class="ghost cancel" hidden>Cancel edit</button></div>
@@ -84,14 +84,14 @@
   <div class="card warn"><strong>Private.</strong> Passwords stay only on this device, encrypted with your passphrase. They are never sent anywhere. Don't email passwords — if you forget the passphrase, saved passwords can't be recovered.</div>
   <div id="lockBox" class="card">
     <h2 id="lockTitle">Unlock accounts</h2>
-    <form id="lockForm"><label>Passphrase<input type="password" name="pass" required autocomplete="current-password"></label>
+    <form id="lockForm" novalidate><label>Passphrase<input type="password" name="pass" required autocomplete="current-password"></label>
     <label id="pass2Wrap" hidden>Confirm passphrase<input type="password" name="pass2" autocomplete="new-password"></label>
     <button class="primary big">Unlock</button></form>
   </div>
   <div id="acctArea" hidden>
-    <form id="acctForm" class="card"><h2>Add account</h2><input type="hidden" name="id">
+    <form id="acctForm" novalidate class="card"><h2>Add account</h2><input type="hidden" name="id">
       <label>Site / service<input name="site" required></label>
-      <label>URL<input name="url" type="url" placeholder="https://"></label>
+      <label>URL<input name="url" type="text" inputmode="url" autocapitalize="off" placeholder="e.g. medicare.gov"></label>
       <label>Username<input name="user" autocomplete="off"></label>
       <label>Password<input name="pw" type="password" autocomplete="new-password"></label>
       <label>Notes<textarea name="notes" rows="2"></textarea></label>
@@ -104,7 +104,7 @@
 </section>
 <!-- APPOINTMENTS -->
 <section id="v-appts" class="view" hidden>
-  <form id="apptForm" class="card"><h2>Add appointment</h2><input type="hidden" name="id">
+  <form id="apptForm" novalidate class="card"><h2>Add appointment</h2><input type="hidden" name="id">
     <label>Title<input name="title" required placeholder="e.g. Neurology follow-up"></label>
     <label>Person<select name="person"><option>Dad</option><option>Dorie</option><option>Both</option><option>Other</option></select></label>
     <label>Date &amp; time<input type="datetime-local" name="when" required></label>
@@ -140,7 +140,7 @@
   <button data-view="accounts"><span>🔒</span>Logins</button>
   <button data-view="more"><span>⋯</span>More</button>
 </nav>
-<dialog id="mgr" aria-labelledby="mgrTitle"><form method="dialog" class="mgr">
+<dialog id="mgr" aria-labelledby="mgrTitle"><form method="dialog" novalidate class="mgr">
   <h2 id="mgrTitle">Edit list</h2>
   <ul id="mgrList" class="list compact"></ul>
   <div class="row addrow"><input id="mgrNew" placeholder="Add a new option" aria-label="New option"><button type="button" id="mgrAdd" class="primary">Add</button></div>

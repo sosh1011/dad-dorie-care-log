@@ -30,11 +30,14 @@ async function loadAll(){const all=await req(tx('items','readonly').getAll());fo
   if(!meta.types)await setMeta('types',DEFAULT_TYPES.slice());if(!meta.roles)await setMeta('roles',DEFAULT_ROLES.slice());
   if(!meta.typesV2){const t=meta.types.slice();for(const n of ['DHS appointment','DHS contact','Emergency room trip'])if(!t.some(x=>x.toLowerCase()===n.toLowerCase())){const o=t.indexOf('Other');o>=0?t.splice(o,0,n):t.push(n)}await setMeta('types',t);await setMeta('typesV2',true)}
   if(!meta.typesV3){const t=meta.types.slice();if(!t.some(isFac)){const o=t.indexOf('Other');o>=0?t.splice(o,0,'Visit/checkout facility'):t.push('Visit/checkout facility')}await setMeta('types',t);await setMeta('typesV3',true)}}
-async function put(it){it.updated=Date.now();await req(tx('items','readwrite').put(it));const a=S[it.kind];const i=a.findIndex(x=>x.id===it.id);i>=0?a[i]=it:a.push(it)}
+async function put(it){it.updated=Date.now();const t=db.transaction('items','readwrite');t.objectStore('items').put(it);await new Promise((res,rej)=>{t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('Save aborted'))});const a=S[it.kind];const i=a.findIndex(x=>x.id===it.id);i>=0?a[i]=it:a.push(it)}
 async function del(it){await put({...it,deleted:true})}/* tombstone so import/merge keeps deletions */
-async function setMeta(k,v){meta[k]=v;await req(tx('meta','readwrite').put(v,k))}
+async function setMeta(k,v){meta[k]=v;const t=db.transaction('meta','readwrite');t.objectStore('meta').put(v,k);await new Promise((res,rej)=>{t.oncomplete=res;t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
 const live=k=>S[k].filter(x=>!x.deleted);
 
+/* ---------- Validation & safe saving ---------- */
+function check(f){for(const el of f.elements){if(el.required&&!el.closest('[hidden]')&&!String(el.value).trim()){const l=el.closest('label')?.firstChild?.textContent||el.getAttribute('aria-label')||el.name;toast(`Please fill in ${l.trim()}`);el.focus();return false}}return true}
+function safe(fn){return async e=>{e.preventDefault();if(!check(e.target))return;try{await fn(e)}catch(err){console.error(err);toast('Could not save: '+(err?.message||err));}}}
 /* ---------- Navigation ---------- */
 function show(v){$$('.view').forEach(s=>s.hidden=s.id!=='v-'+v);$$('.tabs button').forEach(b=>b.toggleAttribute('aria-current',b.dataset.view===v));if(b4(v))location.hash=v;window.scrollTo(0,0)}
 const b4=v=>['hours','appts','contacts','accounts','more'].includes(v);
@@ -75,9 +78,9 @@ $('#quickHours').onclick=e=>{const b=e.target.closest('button');if(!b)return;hf.
 function toggleExtras(){const t=$('#typeSelect').value;$('#xDhs').hidden=!isDhs(t);$('#xEr').hidden=!isEr(t);$('#xMed').hidden=!isMed(t);$('#xRx').hidden=!isRx(t);$('#xFac').hidden=!isFac(t);$('#xBank').hidden=!isBank(t)}
 $('#typeSelect').addEventListener('change',toggleExtras);
 function hourDefaults(){toggleExtras();hf.date.value=today();hf.who.value=meta.lastWho||'Dad'}
-hf.onsubmit=async e=>{e.preventDefault();const d=formData(hf);const hours=(+d.h||0)+(+d.m||0)/60;if(!hours){toast('Enter hours or minutes');hf.h.focus();return}
+hf.onsubmit=safe(async e=>{const d=formData(hf);const hs=String(d.h||'').trim().replace(',','.');let hh=hs.includes(':')?(+hs.split(':')[0]||0)+(+hs.split(':')[1]||0)/60:+hs;if(isNaN(hh)||hh<0||hh>24){toast('Hours should be a number like 1.5');hf.h.focus();return}const hours=(hh||0)+(+d.m||0)/60;if(!hours){toast('Enter hours or minutes');hf.h.focus();return}
   const old=S.hours.find(x=>x.id===d.id);await put({...(old||{}),id:d.id||uid(),kind:'hours',date:d.date,who:d.who,type:d.type,hours:Math.round(hours*100)/100,notes:d.notes.trim(),caseNo:isDhs(d.type)?d.caseNo.trim():'',talkedTo:isDhs(d.type)?d.talkedTo.trim():'',hospital:isEr(d.type)?d.hospital.trim():'',clinic:isMed(d.type)?d.clinic.trim():'',medication:isRx(d.type)?d.medication.trim():'',facility:isFac(d.type)?d.facility.trim():'',bill:isBank(d.type)?d.bill.trim():''});
-  await setMeta('lastWho',d.who);resetForm(hf);hourDefaults();renderHours();toast(old?'Entry updated':'Saved ✓')};
+  await setMeta('lastWho',d.who);resetForm(hf);hourDefaults();renderHours();toast(old?'Entry updated':'Saved ✓')});
 $('#hourCancel').onclick=()=>{resetForm(hf);hourDefaults()};
 function filteredHours(){const f=$('#fFrom').value,t=$('#fTo').value,w=$('#fWho').value,ty=$('#fType').value;
   return live('hours').filter(x=>(!f||x.date>=f)&&(!t||x.date<=t)&&(!w||x.who===w)&&(!ty||x.type===ty)).sort((a,b)=>b.date.localeCompare(a.date)||b.updated-a.updated)}
@@ -95,7 +98,7 @@ $('#hourList').onclick=async e=>{const id=e.target.dataset.ed||e.target.dataset.
 
 /* ---------- Contacts ---------- */
 const cf=$('#contactForm');
-cf.onsubmit=async e=>{e.preventDefault();const d=formData(cf);await put({...d,id:d.id||uid(),kind:'contacts'});resetForm(cf);renderContacts();toast('Contact saved')};
+cf.onsubmit=safe(async e=>{const d=formData(cf);await put({...d,id:d.id||uid(),kind:'contacts'});resetForm(cf);renderContacts();toast('Contact saved')});
 function renderContacts(){const l=live('contacts').sort((a,b)=>a.name.localeCompare(b.name));
   $('#contactList').innerHTML=l.map(x=>`<li><div class="body"><b>${esc(x.name)}</b>${x.role?` · ${esc(x.role)}`:''}<div class="meta">${x.org?esc(x.org)+'<br>':''}${x.phone?`<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a> `:''}${x.email?`<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>`:''}${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Delete</button></div></li>`).join('')||'<li class="muted">No contacts yet — try adding your DHS caseworker.</li>'}
 $('#contactList').onclick=async e=>{const x=S.contacts.find(i=>i.id===(e.target.dataset.ed||e.target.dataset.del));if(!x)return;
@@ -108,18 +111,18 @@ async function deriveKey(pass,salt){const k=await crypto.subtle.importKey('raw',
 async function encrypt(txt){const iv=crypto.getRandomValues(new Uint8Array(12));return{iv:b64(iv),ct:b64(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(txt)))}}
 async function decrypt(o){return dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.ct)))}
 function lockUI(){const first=!meta.vault;$('#lockTitle').textContent=first?'Set a passphrase for your logins':'Unlock logins';$('#pass2Wrap').hidden=!first;$('#lockForm button').textContent=first?'Create & unlock':'Unlock';$('#lockBox').hidden=!!key;$('#acctArea').hidden=!key}
-$('#lockForm').onsubmit=async e=>{e.preventDefault();const f=e.target,p=f.pass.value;
+$('#lockForm').onsubmit=safe(async e=>{const f=e.target,p=f.pass.value;
   try{if(!meta.vault){if(p.length<6)return toast('Use at least 6 characters');if(p!==f.pass2.value)return toast("Passphrases don't match");
       const salt=crypto.getRandomValues(new Uint8Array(16));key=await deriveKey(p,salt);await setMeta('vault',{salt:b64(salt),check:await encrypt('care-log-ok')})}
     else{key=await deriveKey(p,unb64(meta.vault.salt));await decrypt(meta.vault.check)}
   }catch{key=null;toast('Wrong passphrase');return}
-  f.reset();lockUI();renderAccounts();resetIdle()};
+  f.reset();lockUI();renderAccounts();resetIdle()});
 $('#lockNow').onclick=()=>{key=null;$('#acctList').innerHTML='';lockUI()};
 let idleT;function resetIdle(){clearTimeout(idleT);idleT=setTimeout(()=>{if(key){key=null;lockUI()}},10*60*1000)}/* auto-lock after 10 min */
 document.addEventListener('pointerdown',()=>key&&resetIdle());
 const af=$('#acctForm');
-af.onsubmit=async e=>{e.preventDefault();const d=formData(af);const old=S.accounts.find(x=>x.id===d.id);const pw=d.pw;delete d.pw;
-  await put({...d,id:d.id||uid(),kind:'accounts',pwEnc:pw?await encrypt(pw):(old?.pwEnc||null)});resetForm(af);renderAccounts();toast('Account saved (encrypted)')};
+af.onsubmit=safe(async e=>{const d=formData(af);if(d.url&&!/^https?:\/\//i.test(d.url))d.url='https://'+d.url.trim();const old=S.accounts.find(x=>x.id===d.id);const pw=d.pw;delete d.pw;
+  await put({...d,id:d.id||uid(),kind:'accounts',pwEnc:pw?await encrypt(pw):(old?.pwEnc||null)});resetForm(af);renderAccounts();toast('Account saved (encrypted)')});
 function renderAccounts(){if(!key)return;const l=live('accounts').sort((a,b)=>a.site.localeCompare(b.site));
   $('#acctList').innerHTML=l.map(x=>`<li><div class="body"><b>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.site)}</a>`:esc(x.site)}</b><div class="meta">User: ${esc(x.user)||'—'}<br>Password: <span class="pw" data-pw="${x.id}">••••••••</span>${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-show="${x.id}">Show</button><button data-copy="${x.id}">Copy</button><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Del</button></div></li>`).join('')||'<li class="muted">No logins saved yet.</li>'}
 $('#acctList').onclick=async e=>{const d=e.target.dataset,id=d.show||d.copy||d.ed||d.del;const x=S.accounts.find(i=>i.id===id);if(!x||!key)return;
@@ -132,7 +135,7 @@ $('#inclPw').onchange=e=>{if(e.target.checked&&!confirm('Passwords will appear i
 
 /* ---------- Appointments & reminders ---------- */
 const pf=$('#apptForm');const timers=[];
-pf.onsubmit=async e=>{e.preventDefault();const d=formData(pf);const old=S.appts.find(x=>x.id===d.id);await put({...d,id:d.id||uid(),kind:'appts',notified:old&&old.when===d.when&&old.remind===d.remind?old.notified:false});resetForm(pf);renderAppts();askNotif();toast('Appointment saved')};
+pf.onsubmit=safe(async e=>{const d=formData(pf);const old=S.appts.find(x=>x.id===d.id);await put({...d,id:d.id||uid(),kind:'appts',notified:old&&old.when===d.when&&old.remind===d.remind?old.notified:false});resetForm(pf);renderAppts();askNotif();toast('Appointment saved')});
 function renderAppts(){const now=Date.now(),l=live('appts').sort((a,b)=>a.when.localeCompare(b.when));const up=l.filter(x=>new Date(x.when)>=now-3600e3),past=l.filter(x=>!up.includes(x)).reverse();
   const li=x=>`<li><div class="body"><b>${esc(x.title)}</b> · ${esc(x.person)}<div class="meta">${fmtDT(x.when)}${x.loc?' · '+esc(x.loc):''}${+x.remind?` · ⏰ ${x.remind==1440?'1 day':x.remind+' min'} before`:''}${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-ics="${x.id}" title="Add to calendar">📅</button><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Del</button></div></li>`;
   $('#apptList').innerHTML=(up.map(li).join('')||'<li class="muted">No upcoming appointments.</li>')+(past.length?`<li class="muted"><b>Past</b></li>`+past.slice(0,20).map(li).join(''):'');
@@ -194,6 +197,7 @@ $('#importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{c
 
 /* ---------- Boot ---------- */
 function renderAll(){renderTypes();renderHours();renderContacts();renderAppts();lockUI();renderAccounts();notifState()}
-(async()=>{db=await openDB();await loadAll();renderAll();hourDefaults();show(b4(location.hash.slice(1))?location.hash.slice(1):'hours');
+(async()=>{try{db=await openDB()}catch(err){alert('This browser is blocking storage (private browsing?). Entries cannot be saved here. Open the app in normal Safari/Chrome or from the Home Screen icon.');return}
+  navigator.storage?.persist?.().catch(()=>{});await loadAll();renderAll();hourDefaults();show(b4(location.hash.slice(1))?location.hash.slice(1):'hours');
   if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
   setTimeout(askNotif,1500)})();
