@@ -46,7 +46,8 @@ $$('.tabs button').forEach(b=>b.onclick=()=>show(b.dataset.view));
 /* ---------- Generic form helpers ---------- */
 const formData=f=>Object.fromEntries(new FormData(f));
 function fill(f,o){for(const el of f.elements){if(!el.name)continue;if(el.type==='radio')el.checked=o[el.name]===el.value;else el.value=o[el.name]??''}}
-function editMode(f,on){const c=$('.cancel',f)||$('#hourCancel');if(c)c.hidden=!on;const h=$('h2',f);if(h){h.dataset.t??=h.textContent;h.textContent=on?h.dataset.t.replace(/^Add|^Log/,'Edit'):h.dataset.t}if(on)f.scrollIntoView({behavior:'smooth'})}
+function editMode(f,on,word='Edit'){const c=$('.cancel',f)||$('#hourCancel');if(c)c.hidden=!on;const h=$('h2',f);if(h){h.dataset.t??=h.textContent;h.textContent=on?h.dataset.t.replace(/^Add|^Log/,word):h.dataset.t}if(on)f.scrollIntoView({behavior:'smooth'})}
+function copyMode(f){f.elements.id.value='';editMode(f,true,'Copy');toast('Copied into the form — change anything, then Save')}
 function resetForm(f){f.reset();f.elements.id.value='';editMode(f,false)}
 $$('form .cancel').forEach(b=>b.onclick=()=>resetForm(b.form));
 
@@ -88,21 +89,20 @@ function weekStart(){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7)
 function renderHours(){const all=live('hours'),sum=a=>a.reduce((s,x)=>s+x.hours,0),t=today(),w=weekStart();
   $('#totals').innerHTML=`<div><b>${+sum(all.filter(x=>x.date===t)).toFixed(2)}</b><span>Today</span></div><div><b>${+sum(all.filter(x=>x.date>=w)).toFixed(2)}</b><span>This week</span></div><div><b>${+sum(all).toFixed(2)}</b><span>All time</span></div>`;
   const list=filteredHours();$('#fSum').textContent=`${list.length} entr${list.length==1?'y':'ies'} · ${fmtH(sum(list))}`;
-  $('#hourList').innerHTML=list.map(x=>`<li><div class="body"><div><b>${esc(x.type)}</b> · ${esc(x.who)}</div><div class="meta">${fmtDate(x.date)}${extras(x)?' · '+esc(extras(x)):''}${x.notes?' — '+esc(x.notes):''}</div></div><span class="hrs">${x.hours} h</span><div class="tools"><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Delete</button></div></li>`).join('')||'<li class="muted">No entries yet.</li>'}
-$('#hourList').onclick=async e=>{const id=e.target.dataset.ed||e.target.dataset.del;const x=S.hours.find(i=>i.id===id);if(!x)return;
+  $('#hourList').innerHTML=list.map(x=>`<li><div class="body"><div><b>${esc(x.type)}</b> · ${esc(x.who)}</div><div class="meta">${fmtDate(x.date)}${extras(x)?' · '+esc(extras(x)):''}${x.notes?' — '+esc(x.notes):''}</div></div><span class="hrs">${x.hours} h</span><div class="tools"><button data-ed="${x.id}">Edit</button><button data-dup="${x.id}">Copy</button><button class="danger" data-del="${x.id}">Delete</button></div></li>`).join('')||'<li class="muted">No entries yet.</li>'}
+$('#hourList').onclick=async e=>{const id=e.target.dataset.ed||e.target.dataset.del||e.target.dataset.dup;const x=S.hours.find(i=>i.id===id);if(!x)return;
   if(e.target.dataset.del){if(confirm('Delete this entry?')){await del(x);renderHours();toast('Deleted')}return}
   if(!meta.types.includes(x.type))$('#typeSelect').insertAdjacentHTML('beforeend',`<option>${esc(x.type)}</option>`);
-  const H=Math.floor(x.hours),M=Math.round((x.hours-H)*60);fill(hf,{...x,h:H||'',m:[0,15,30,45].includes(M)?M:0});
-  toggleExtras();if(![0,15,30,45].includes(M)){hf.m.insertAdjacentHTML('beforeend',`<option>${M}</option>`);hf.m.value=M}editMode(hf,true)};
+  fill(hf,{...x,h:x.hours,m:0});toggleExtras();if(e.target.dataset.dup){hf.date.value=today();copyMode(hf)}else editMode(hf,true)};
 ['#fFrom','#fTo','#fWho','#fType'].forEach(s=>$(s).onchange=renderHours);
 
 /* ---------- Contacts ---------- */
 const cf=$('#contactForm');
 cf.onsubmit=safe(async e=>{const d=formData(cf);await put({...d,id:d.id||uid(),kind:'contacts'});resetForm(cf);renderContacts();toast('Contact saved')});
 function renderContacts(){const l=live('contacts').sort((a,b)=>a.name.localeCompare(b.name));
-  $('#contactList').innerHTML=l.map(x=>`<li><div class="body"><b>${esc(x.name)}</b>${x.role?` · ${esc(x.role)}`:''}<div class="meta">${x.org?esc(x.org)+'<br>':''}${x.phone?`<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a> `:''}${x.email?`<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>`:''}${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Delete</button></div></li>`).join('')||'<li class="muted">No contacts yet — try adding your DHS caseworker.</li>'}
-$('#contactList').onclick=async e=>{const x=S.contacts.find(i=>i.id===(e.target.dataset.ed||e.target.dataset.del));if(!x)return;
-  if(e.target.dataset.del){if(confirm(`Delete ${x.name}?`)){await del(x);renderContacts()}return}fill(cf,x);editMode(cf,true)};
+  $('#contactList').innerHTML=l.map(x=>`<li><div class="body"><b>${esc(x.name)}</b>${x.role?` · ${esc(x.role)}`:''}<div class="meta">${x.org?esc(x.org)+'<br>':''}${x.phone?`<a href="tel:${esc(x.phone)}">${esc(x.phone)}</a> `:''}${x.email?`<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>`:''}${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-ed="${x.id}">Edit</button><button data-dup="${x.id}">Copy</button><button class="danger" data-del="${x.id}">Delete</button></div></li>`).join('')||'<li class="muted">No contacts yet — try adding your DHS caseworker.</li>'}
+$('#contactList').onclick=async e=>{const x=S.contacts.find(i=>i.id===(e.target.dataset.ed||e.target.dataset.del||e.target.dataset.dup));if(!x)return;
+  if(e.target.dataset.del){if(confirm(`Delete ${x.name}?`)){await del(x);renderContacts()}return}fill(cf,x);e.target.dataset.dup?(cf.name.value+=' (copy)',copyMode(cf)):editMode(cf,true)};
 
 /* ---------- Accounts (AES-GCM, PBKDF2 passphrase) ---------- */
 let key=null;const enc=new TextEncoder(),dec=new TextDecoder();
@@ -124,12 +124,13 @@ const af=$('#acctForm');
 af.onsubmit=safe(async e=>{const d=formData(af);if(d.url&&!/^https?:\/\//i.test(d.url))d.url='https://'+d.url.trim();const old=S.accounts.find(x=>x.id===d.id);const pw=d.pw;delete d.pw;
   await put({...d,id:d.id||uid(),kind:'accounts',pwEnc:pw?await encrypt(pw):(old?.pwEnc||null)});resetForm(af);renderAccounts();toast('Account saved (encrypted)')});
 function renderAccounts(){if(!key)return;const l=live('accounts').sort((a,b)=>a.site.localeCompare(b.site));
-  $('#acctList').innerHTML=l.map(x=>`<li><div class="body"><b>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.site)}</a>`:esc(x.site)}</b><div class="meta">User: ${esc(x.user)||'—'}<br>Password: <span class="pw" data-pw="${x.id}">••••••••</span>${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-show="${x.id}">Show</button><button data-copy="${x.id}">Copy</button><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Del</button></div></li>`).join('')||'<li class="muted">No logins saved yet.</li>'}
-$('#acctList').onclick=async e=>{const d=e.target.dataset,id=d.show||d.copy||d.ed||d.del;const x=S.accounts.find(i=>i.id===id);if(!x||!key)return;
+  $('#acctList').innerHTML=l.map(x=>`<li><div class="body"><b>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.site)}</a>`:esc(x.site)}</b><div class="meta">User: ${esc(x.user)||'—'}<br>Password: <span class="pw" data-pw="${x.id}">••••••••</span>${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-show="${x.id}">Show</button><button data-copy="${x.id}">Copy</button><button data-ed="${x.id}">Edit</button><button data-dup="${x.id}">Copy</button><button class="danger" data-del="${x.id}">Del</button></div></li>`).join('')||'<li class="muted">No logins saved yet.</li>'}
+$('#acctList').onclick=async e=>{const d=e.target.dataset,id=d.show||d.copy||d.ed||d.del||d.dup;const x=S.accounts.find(i=>i.id===id);if(!x||!key)return;
   const pw=x.pwEnc?await decrypt(x.pwEnc).catch(()=>'(cannot decrypt)'):'';
   if(d.show){const s=$(`[data-pw="${id}"]`);const on=e.target.textContent==='Show';s.textContent=on?(pw||'—'):'••••••••';e.target.textContent=on?'Hide':'Show'}
   else if(d.copy){await navigator.clipboard.writeText(pw);toast('Password copied')}
   else if(d.del){if(confirm(`Delete ${x.site}?`)){await del(x);renderAccounts()}}
+  else if(d.dup){fill(af,{...x,pw});af.pw.placeholder='';copyMode(af)}
   else{fill(af,{...x,pw:''});af.pw.placeholder='Leave blank to keep current';editMode(af,true)}};
 $('#inclPw').onchange=e=>{if(e.target.checked&&!confirm('Passwords will appear in plain text in the printout/email. Anyone who sees it can use them. Continue?'))e.target.checked=false};
 
@@ -137,11 +138,11 @@ $('#inclPw').onchange=e=>{if(e.target.checked&&!confirm('Passwords will appear i
 const pf=$('#apptForm');const timers=[];
 pf.onsubmit=safe(async e=>{const d=formData(pf);const old=S.appts.find(x=>x.id===d.id);await put({...d,id:d.id||uid(),kind:'appts',notified:old&&old.when===d.when&&old.remind===d.remind?old.notified:false});resetForm(pf);renderAppts();askNotif();toast('Appointment saved')});
 function renderAppts(){const now=Date.now(),l=live('appts').sort((a,b)=>a.when.localeCompare(b.when));const up=l.filter(x=>new Date(x.when)>=now-3600e3),past=l.filter(x=>!up.includes(x)).reverse();
-  const li=x=>`<li><div class="body"><b>${esc(x.title)}</b> · ${esc(x.person)}<div class="meta">${fmtDT(x.when)}${x.loc?' · '+esc(x.loc):''}${+x.remind?` · ⏰ ${x.remind==1440?'1 day':x.remind+' min'} before`:''}${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-ics="${x.id}" title="Add to calendar">📅</button><button data-ed="${x.id}">Edit</button><button class="danger" data-del="${x.id}">Del</button></div></li>`;
+  const li=x=>`<li><div class="body"><b>${esc(x.title)}</b> · ${esc(x.person)}<div class="meta">${fmtDT(x.when)}${x.loc?' · '+esc(x.loc):''}${+x.remind?` · ⏰ ${x.remind==1440?'1 day':x.remind+' min'} before`:''}${x.notes?'<br>'+esc(x.notes):''}</div></div><div class="tools"><button data-ics="${x.id}" title="Add to calendar">📅</button><button data-ed="${x.id}">Edit</button><button data-dup="${x.id}">Copy</button><button class="danger" data-del="${x.id}">Del</button></div></li>`;
   $('#apptList').innerHTML=(up.map(li).join('')||'<li class="muted">No upcoming appointments.</li>')+(past.length?`<li class="muted"><b>Past</b></li>`+past.slice(0,20).map(li).join(''):'');
   scheduleReminders();banner()}
-$('#apptList').onclick=async e=>{const d=e.target.dataset,x=S.appts.find(i=>i.id===(d.ed||d.del||d.ics));if(!x)return;
-  if(d.del){if(confirm(`Delete ${x.title}?`)){await del(x);renderAppts()}}else if(d.ics)downloadICS(x);else{fill(pf,x);editMode(pf,true)}};
+$('#apptList').onclick=async e=>{const d=e.target.dataset,x=S.appts.find(i=>i.id===(d.ed||d.del||d.ics||d.dup));if(!x)return;
+  if(d.del){if(confirm(`Delete ${x.title}?`)){await del(x);renderAppts()}}else if(d.ics)downloadICS(x);else{fill(pf,x);d.dup?copyMode(pf):editMode(pf,true)}};
 function downloadICS(x){const f=s=>new Date(s).toISOString().replace(/[-:]|\.\d+/g,''),e=s=>String(s||'').replace(/[,;\\]/g,m=>'\\'+m).replace(/\n/g,'\\n');const st=new Date(x.when);
   const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//CareLog//EN','BEGIN:VEVENT',`UID:${x.id}@carelog`,`DTSTAMP:${f(Date.now())}`,`DTSTART:${f(st)}`,`DTEND:${f(st.getTime()+3600e3)}`,`SUMMARY:${e(x.title+' ('+x.person+')')}`,`LOCATION:${e(x.loc)}`,`DESCRIPTION:${e(x.notes)}`,...(+x.remind?['BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:Reminder',`TRIGGER:-PT${x.remind}M`,'END:VALARM']:[]),'END:VEVENT','END:VCALENDAR'].join('\r\n');
   download(`${x.title.replace(/\W+/g,'-')}.ics`,ics,'text/calendar')}
